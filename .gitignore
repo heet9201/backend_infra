@@ -1,7 +1,6 @@
 purva-api-74d1474dc39b.json
 venv/
 .env
-*.env
 *.pyc
 __pycache__/
 *.pyo
