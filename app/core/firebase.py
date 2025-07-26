@@ -1,34 +1,39 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud import storage
+from google.oauth2 import service_account
 import os
-from app.core.config import GOOGLE_CREDENTIALS
 
-# Define the Cloud Storage location of the Firebase credentials
+# Where to save the downloaded credentials
+FIREBASE_CREDENTIALS_PATH = "/tmp/firebase.json"
+
+# Your GCS bucket and blob location
 CLOUD_STORAGE_BUCKET = "purva-api_cloudbuild"
 CLOUD_STORAGE_BLOB_NAME = "source/purva-api-74d1474dc39b.json"
 
-# Initialize Firebase
-def initialize_firebase():
-    # Check if credentials exist in /tmp, otherwise download from Cloud Storage
-    if not os.path.exists(GOOGLE_CREDENTIALS):
-        print(f"Downloading Firebase credentials from Cloud Storage to {GOOGLE_CREDENTIALS}")
-        
-        # Initialize the Cloud Storage client
-        storage_client = storage.Client()
+def download_firebase_credentials():
+    if not os.path.exists(FIREBASE_CREDENTIALS_PATH):
+        print(f"Downloading Firebase credentials to {FIREBASE_CREDENTIALS_PATH}")
+
+        # Optionally: Load service account manually from bundled file in container/local
+        # Otherwise use default credentials (in GCP)
+        try:
+            storage_client = storage.Client()
+        except Exception as e:
+            print("Could not initialize default credentials:", e)
+            raise
+
         bucket = storage_client.bucket(CLOUD_STORAGE_BUCKET)
         blob = bucket.blob(CLOUD_STORAGE_BLOB_NAME)
-        
-        # Download the Firebase credentials to the local filesystem
-        blob.download_to_filename(GOOGLE_CREDENTIALS)
+        blob.download_to_filename(FIREBASE_CREDENTIALS_PATH)
+
         print("Firebase credentials downloaded successfully!")
 
-    # Initialize Firebase with the credentials
-    cred = credentials.Certificate(GOOGLE_CREDENTIALS)
-    firebase_admin.initialize_app(cred)
+def initialize_firebase():
+    download_firebase_credentials()
 
-    # Initialize Firestore (db) client
-    db = firestore.client()
-    
-    # Return the db so it can be used elsewhere in your project
-    return db
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
+        firebase_admin.initialize_app(cred)
+
+    return firestore.client()
