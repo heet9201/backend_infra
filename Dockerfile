@@ -3,7 +3,7 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# Environment variables
+# Environment variables (do NOT override credentials path here)
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8080 \
@@ -11,28 +11,17 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    apt-get install -y --no-install-recommends gcc && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip to the latest version
-RUN pip install --no-cache-dir --upgrade pip
-
 # Copy requirements first for better cache usage
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install dependencies and verify uvicorn
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip show uvicorn || { echo "Uvicorn installation failed"; exit 1; }
-
-# Copy application code
+# Copy the rest of the application
 COPY . .
 
-# Copy Firebase credentials (if needed, adjust based on your setup)
-COPY firebase.json /tmp/firebase.json
+# Start app using Gunicorn with Uvicorn workers
+CMD exec gunicorn main:app --workers 1 --threads 8 --timeout 0 --bind :$PORT -k uvicorn.workers.UvicornWorker
 
-# Verify uvicorn is executable
-RUN which uvicorn || { echo "uvicorn not found in PATH"; exit 1; }
-
-# Start app using Uvicorn
-CMD exec uvicorn main:app --host 0.0.0.0 --port $PORT
