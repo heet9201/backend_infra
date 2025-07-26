@@ -1,7 +1,6 @@
+runtime: custom
+env: flex
 service: backend-infra
-
-runtime: python310
-entrypoint: uvicorn main:app --host 0.0.0.0 --port $PORT
 
 env_variables:
   GOOGLE_APPLICATION_CREDENTIALS: "/tmp/firebase.json"

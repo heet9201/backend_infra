@@ -3,13 +3,11 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# Set environment variables
+# Environment variables (do NOT override credentials path here)
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8080 \
-    PYTHONPATH=/app \
-    GOOGLE_APPLICATION_CREDENTIALS="" \
-    FIREBASE_CREDENTIALS_JSON=""
+    PYTHONPATH=/app
 
 # Install system dependencies
 RUN apt-get update && \
@@ -24,5 +22,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-# Run the application
-CMD exec gunicorn --bind :$PORT main:app --workers 1 --threads 8 --timeout 0
+# Start app using Gunicorn with Uvicorn workers
+CMD exec gunicorn --bind :$PORT main:app --workers 1 --threads 8 --timeout 0
