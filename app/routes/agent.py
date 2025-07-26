@@ -1,26 +1,25 @@
 from fastapi import APIRouter, HTTPException, Body
 from app.models.agent_model import (
-    MainAgentRequest, AgentResponse, HyperLocalContentRequest,
-    Language, ContentType, AgentType, Subject, HyperLocalContentResponse
+    MainAgentRequest, AgentResponse, HyperLocalContentRequest, VisualAidRequest,
+    Language, ContentType, AgentType, Subject, HyperLocalContentResponse, VisualAidResponse, VisualAidType
 )
-from app.services.main_agent_service import MainAgentService
-from app.services.hyper_local_content_service import HyperLocalContentService
+from app.services.main_agent_service import main_agent_service
+from app.services.hyper_local_content_service import hyper_local_content_service
+from app.services.visual_aids_service import visual_aids_service
 from app.services.session_service import session_service
 from app.utils.logger import logger
+from app.core.vertex_ai import VERTEX_AI_AVAILABLE, VERTEX_AI_INITIALIZED
 from typing import Optional, List
 
 router = APIRouter()
 
 # Initialize services with error handling
 try:
-    main_agent_service = MainAgentService()
-    hyper_local_service = HyperLocalContentService()
+    # Services are already imported as singletons
     SERVICES_INITIALIZED = True
     logger.info("Agent services initialized successfully")
 except Exception as e:
     logger.error(f"Error initializing agent services: {e}")
-    main_agent_service = None
-    hyper_local_service = None
     SERVICES_INITIALIZED = False
 
 @router.post("/query", response_model=AgentResponse)
@@ -143,7 +142,7 @@ async def generate_hyper_local_content(
         HyperLocalContentResponse: The generated content with cultural elements
     """
     try:
-        if not SERVICES_INITIALIZED or not hyper_local_service:
+        if not SERVICES_INITIALIZED or not hyper_local_content_service:
             raise HTTPException(status_code=503, detail="Agent services are not properly initialized")
         
         # Create request object
@@ -174,7 +173,7 @@ async def generate_hyper_local_content(
         logger.info(f"Received enhanced hyper-local content request for topic: {request.topic}")
         
         # Pass user_id for session tracking if provided
-        response = hyper_local_service.generate_content(request, user_id=user_id)
+        response = hyper_local_content_service.generate_content(request, user_id=user_id)
         
         logger.info(f"Enhanced hyper-local content response status: {response.status}")
         return response
@@ -182,6 +181,123 @@ async def generate_hyper_local_content(
         raise
     except Exception as e:
         logger.error(f"Error generating hyper-local content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/visual-aids", response_model=VisualAidResponse)
+async def generate_visual_aid(
+    description: str = Body(..., description="The description of what you want to generate as a visual aid"),
+    subject: Subject = Body(..., description="The subject for which the visual aid is created"),
+    topic: Optional[str] = Body(None, description="Optional topic - can be derived from description"),
+    visual_type: Optional[VisualAidType] = Body(VisualAidType.LINE_DRAWING, description="Type of visual aid to generate"),
+    grade_levels: Optional[List[int]] = Body([5, 6, 7], description="Target grade levels"),
+    language: Optional[Language] = Body(Language.ENGLISH, description="Language for the visual aid"),
+    complexity: Optional[str] = Body("medium", description="Complexity level (simple, medium, detailed)"),
+    include_labels: Optional[bool] = Body(True, description="Include labels on the visual aid"),
+    include_instructions: Optional[bool] = Body(True, description="Include teaching instructions"),
+    blackboard_friendly: Optional[bool] = Body(True, description="Optimize for drawing on a blackboard"),
+    color_scheme: Optional[str] = Body("blackboard", description="Color scheme (blackboard, colored, grayscale)"),
+    additional_requirements: Optional[str] = Body(None, description="Any additional specifications"),
+    user_id: Optional[str] = Body(None, description="User ID for session tracking")
+):
+    """
+    Generate blackboard-friendly visual aids for educational use based on a text description
+    
+    This endpoint creates step-by-step instructions for drawing visual aids
+    that teachers can reproduce on a blackboard or whiteboard to explain
+    concepts effectively, primarily based on a text description.
+    """
+    try:
+        # Check if services are initialized
+        if not SERVICES_INITIALIZED or not visual_aids_service:
+            raise HTTPException(
+                status_code=503,
+                detail="Visual aids service not initialized properly"
+            )
+        
+        # If user_id is provided, validate it
+        if user_id:
+            try:
+                session = session_service.get_session(user_id)
+            except Exception as session_error:
+                logger.warning(f"Invalid user_id for session: {session_error}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid user_id: {user_id}"
+                )
+        
+        # Create request object
+        request = VisualAidRequest(
+            description=description,
+            subject=subject,
+            topic=topic,
+            visual_type=visual_type,
+            grade_levels=grade_levels,
+            language=language,
+            complexity=complexity,
+            include_labels=include_labels,
+            include_instructions=include_instructions,
+            blackboard_friendly=blackboard_friendly,
+            color_scheme=color_scheme,
+            additional_requirements=additional_requirements,
+            user_id=user_id
+        )
+        
+        # Generate the visual aid
+        response = visual_aids_service.generate_visual_aid(request, user_id=user_id)
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating visual aid: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/visual-aid-types")
+async def get_visual_aid_types():
+    """Get available visual aid types and their descriptions"""
+    try:
+        return {
+            "visual_aid_types": [
+                {
+                    "type": VisualAidType.LINE_DRAWING.value,
+                    "name": "Line Drawing",
+                    "description": "Simple line drawings of concepts or objects",
+                    "subjects": ["Science", "Environmental Science"]
+                },
+                {
+                    "type": VisualAidType.CHART.value,
+                    "name": "Chart",
+                    "description": "Bar charts, pie charts, or other data representations",
+                    "subjects": ["Mathematics", "Social Studies"]
+                },
+                {
+                    "type": VisualAidType.DIAGRAM.value,
+                    "name": "Diagram",
+                    "description": "Labeled diagrams showing parts of a system or object",
+                    "subjects": ["Science", "Social Studies"]
+                },
+                {
+                    "type": VisualAidType.FLOWCHART.value,
+                    "name": "Flowchart",
+                    "description": "Step-by-step process or cycle visualizations",
+                    "subjects": ["Science", "Social Studies", "General Knowledge"]
+                },
+                {
+                    "type": VisualAidType.CONCEPT_MAP.value,
+                    "name": "Concept Map",
+                    "description": "Interconnected concepts with relationship indicators",
+                    "subjects": ["All subjects"]
+                },
+                {
+                    "type": VisualAidType.INFOGRAPHIC.value,
+                    "name": "Infographic",
+                    "description": "Information-rich visual representation of a topic",
+                    "subjects": ["General Knowledge", "Social Studies"]
+                }
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving visual aid types: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/health")
@@ -252,7 +368,8 @@ async def test_agent():
                 "/agent/query": "Main agent endpoint for natural language queries",
                 "/agent/hyper-local-content": "Direct endpoint for content generation",
                 "/agent/health": "Service health status",
-                "/agent/test": "This test endpoint"
+                "/agent/test": "This test endpoint",
+                "/agent/visual-aids-direct": "Direct image generation with Imagen 4"
             },
             "current_limitations": [
                 "Vertex AI package not installed" if not VERTEX_AI_AVAILABLE else None,
@@ -262,4 +379,72 @@ async def test_agent():
         }
     except Exception as e:
         logger.error(f"Error in agent test: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/visual-aids-direct", response_model=VisualAidResponse)
+async def generate_visual_aid_direct(
+    description: str = Body(..., embed=True),
+    text: Optional[str] = Body(None, embed=True)
+):
+    """
+    Direct endpoint for generating educational visual aids using Imagen 4
+    
+    Args:
+        description: Description of the educational visual aid to generate
+        text: Optional text to include in the visual
+        
+    Returns:
+        VisualAidResponse containing image URL and drawing instructions
+    """
+    from app.core.vertex_ai import generate_image
+    import os
+    
+    try:
+        logger.info(f"Direct visual aid generation request: {description[:50]}...")
+        
+        # Prepare the prompt based on input
+        prompt = description
+        if text:
+            prompt = f"{description} with the following text: {text}"
+            
+        # Create an enhanced educational prompt
+        enhanced_prompt = f"""Create a clear, high-quality educational illustration about: {prompt}
+
+Key requirements:
+- Professional educational visual suitable for teaching
+- Clear visual hierarchy and organization
+- Accurate educational content
+- Appropriate labeling of key elements
+- Easy to understand at a glance
+- Visually engaging for students
+"""
+        
+        # Generate image using Vertex AI Imagen 4
+        image_path = generate_image(enhanced_prompt)
+        
+        if not image_path:
+            raise HTTPException(status_code=500, detail="Failed to generate visual aid")
+            
+        # Get relative path for the image URL
+        relative_path = image_path.replace(os.getcwd(), "").lstrip("/")
+        image_url = f"/static/{relative_path}" if not relative_path.startswith("static") else f"/{relative_path}"
+        
+        # Generate drawing instructions based on description
+        instructions = f"Educational visualization of {description}"
+        if text:
+            instructions += f" including text: {text}"
+            
+        # Create visual aid response
+        return VisualAidResponse(
+            title=description[:50] + ("..." if len(description) > 50 else ""),
+            description=description,
+            image_url=image_url,
+            image_path=image_path,
+            drawing_instructions=instructions,
+            teaching_tips=f"Use this visual to help students understand {description}.",
+            visual_aid_type=VisualAidType.DIAGRAM
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating direct visual aid: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -31,7 +31,8 @@ class ContentType(str, Enum):
     WORD_PROBLEMS = "word_problems"
     READING_COMPREHENSION = "reading_comprehension"
     ACTIVITY_INSTRUCTIONS = "activity_instructions"
-    STORIES_NARRATIVES = "stories_narratives"
+    STORIES_NARRATIVES = "stories_&_narratives"
+    VISUAL_AID = "visual_aid"
 
 class Subject(str, Enum):
     MATHEMATICS = "mathematics"
@@ -147,3 +148,50 @@ class MainAgentRequest(BaseModel):
     language: Optional[Language] = Language.ENGLISH
     context: Optional[Dict[str, Any]] = {}
     user_id: Optional[str] = None
+    
+class VisualAidType(str, Enum):
+    LINE_DRAWING = "line_drawing"
+    CHART = "chart"
+    DIAGRAM = "diagram"
+    FLOWCHART = "flowchart"
+    CONCEPT_MAP = "concept_map"
+    INFOGRAPHIC = "infographic"
+
+class VisualAidRequest(BaseModel):
+    description: str  # The primary input: text description of what to generate
+    subject: Subject
+    topic: Optional[str] = None  # Now optional, can be derived from description
+    visual_type: Optional[VisualAidType] = VisualAidType.LINE_DRAWING  # Now optional with default
+    grade_levels: Optional[List[int]] = [5, 6, 7]  # Default to middle school
+    language: Language = Language.ENGLISH
+    complexity: Optional[str] = "medium"  # simple, medium, detailed
+    include_labels: Optional[bool] = True
+    include_instructions: Optional[bool] = True
+    blackboard_friendly: Optional[bool] = True
+    color_scheme: Optional[str] = "blackboard"  # blackboard, colored, grayscale
+    additional_requirements: Optional[str] = None
+    user_id: Optional[str] = None
+    
+class VisualAid(BaseModel):
+    title: str
+    description: str
+    image_url: str  # URL or path to access the image (can be relative path, absolute path, or web URL)
+    image_path: Optional[str] = None  # Local file path on server (for internal use)
+    drawing_instructions: Optional[str] = None
+    visual_type: VisualAidType
+    complexity: str
+    estimated_drawing_time: Optional[str] = None
+    labels: Optional[List[str]] = []
+    teaching_tips: Optional[List[str]] = []
+
+class VisualAidResponse(BaseModel):
+    status: str
+    agent_type: AgentType
+    language: Language
+    subject: str
+    grade_levels: List[int]
+    visual_aids: List[VisualAid] = []
+    generation_time: Optional[str] = None
+    error_message: Optional[str] = None
+    session: Optional[SessionInfo] = None
+    metadata: Optional[Dict[str, Any]] = {}

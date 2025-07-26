@@ -8,3 +8,5 @@ __pycache__/
 *.pyd
 postman_collection.json
 postman_collection_old.json
+generated_images/
+static/
