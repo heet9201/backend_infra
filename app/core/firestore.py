@@ -1,4 +1,7 @@
-from app.core.firebase import db
+from app.core.firebase import initialize_firebase
+
+# Initialize Firestore (db)
+db = initialize_firebase()
 
 def add_user_to_firestore(user_id: str, user_data: dict):
     users_ref = db.collection("users").document(user_id)
