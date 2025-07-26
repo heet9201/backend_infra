@@ -35,4 +35,4 @@ jobs:
 
       - name: Deploy to Google App Engine
         run: |
-          gcloud app deploy --quiet --service=backend-infra
+          gcloud app deploy --quiet
