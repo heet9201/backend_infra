@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Body
 from app.models.agent_model import (
     MainAgentRequest, AgentResponse, HyperLocalContentRequest,
-    Language, ContentType, AgentType
+    Language, ContentType, AgentType, Subject, HyperLocalContentResponse
 )
 from app.services.main_agent_service import MainAgentService
 from app.services.hyper_local_content_service import HyperLocalContentService
@@ -46,35 +46,101 @@ async def query_main_agent(request: MainAgentRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in main agent query: {e}")
+        logger.error(f"Error in enhanced hyper-local content generation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/hyper-local-content", response_model=AgentResponse)
+@router.get("/content-options")
+async def get_content_options():
+    """
+    Get available options for content generation
+    
+    Returns:
+        Dict: Available subjects, content types, languages, and other options
+    """
+    try:
+        return {
+            "subjects": [{"value": subject.value, "label": subject.value.replace("_", " ").title()} for subject in Subject],
+            "content_types": [{"value": ct.value, "label": ct.value.replace("_", " ").title()} for ct in ContentType],
+            "languages": [{"value": lang.value, "label": lang.value.title()} for lang in Language],
+            "difficulty_levels": [
+                {"value": "easy", "label": "Easy"},
+                {"value": "medium", "label": "Medium"},
+                {"value": "hard", "label": "Hard"}
+            ],
+            "content_lengths": [
+                {"value": "short", "label": "Short"},
+                {"value": "medium", "label": "Medium"},
+                {"value": "long", "label": "Long"}
+            ],
+            "question_types": [
+                {"value": "mcq", "label": "Multiple Choice Questions"},
+                {"value": "short_answer", "label": "Short Answer Questions"},
+                {"value": "long_answer", "label": "Long Answer Questions"}
+            ],
+            "grade_levels": list(range(1, 13)),
+            "sample_locations": [
+                "Mumbai", "Delhi", "Bangalore", "Chennai", "Kolkata", "Pune", 
+                "Hyderabad", "Ahmedabad", "Jaipur", "Lucknow", "Kanpur", "Nagpur"
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error getting content options: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/hyper-local-content", response_model=HyperLocalContentResponse)
 async def generate_hyper_local_content(
     topic: str = Body(...),
+    subject: Subject = Body(...),
+    grade_levels: List[int] = Body(...),
     language: Language = Body(...),
-    grade_levels: List[int] = Body([1, 2, 3, 4, 5]),
-    cultural_context: str = Body("Indian rural context"),
-    content_type: ContentType = Body(ContentType.STORY),
-    subject: str = Body("general"),
+    content_type: ContentType = Body(...),
+    location: Optional[str] = Body("India"),
+    cultural_context: Optional[str] = Body("Indian rural context"),
+    include_local_examples: Optional[bool] = Body(True),
+    include_cultural_context: Optional[bool] = Body(True),
+    include_local_dialect: Optional[bool] = Body(False),
+    include_regional_references: Optional[bool] = Body(True),
+    include_local_currency: Optional[bool] = Body(True),
+    include_local_festivals: Optional[bool] = Body(False),
+    include_local_traditions: Optional[bool] = Body(False),
+    difficulty_level: Optional[str] = Body("medium"),
+    content_length: Optional[str] = Body("medium"),
     additional_requirements: Optional[str] = Body(None),
+    include_questions: Optional[bool] = Body(False),
+    question_types: Optional[List[str]] = Body([]),
+    generate_preview: Optional[bool] = Body(True),
+    preview_count: Optional[int] = Body(3),
     user_id: Optional[str] = Body(None)
 ):
     """
-    Generate hyper-local, culturally relevant educational content
+    Generate enhanced hyper-local, culturally relevant educational content
     
     Args:
         topic: The topic for content generation
-        language: The language for content
+        subject: The subject area
         grade_levels: Target grade levels (1-12)
+        language: The language for content
+        content_type: Type of content (story, word_problems, etc.)
+        location: City/State/Region for local context
         cultural_context: Cultural context for content
-        content_type: Type of content (story, explanation, etc.)
-        subject: Subject area (science, math, etc.)
+        include_local_examples: Include local examples and references
+        include_cultural_context: Include cultural traditions and festivals
+        include_local_dialect: Include regional words with explanations
+        include_regional_references: Include local geographical references
+        include_local_currency: Use Indian currency in examples
+        include_local_festivals: Include local festivals and celebrations
+        include_local_traditions: Include local traditions and customs
+        difficulty_level: Content difficulty (easy, medium, hard)
+        content_length: Content length (short, medium, long)
         additional_requirements: Any additional requirements
+        include_questions: Generate assessment questions
+        question_types: Types of questions (mcq, short_answer, etc.)
+        generate_preview: Generate multiple content pieces for preview
+        preview_count: Number of content pieces to generate
         user_id: Optional user ID for session tracking and history
         
     Returns:
-        AgentResponse: The generated content along with session information
+        HyperLocalContentResponse: The generated content with cultural elements
     """
     try:
         if not SERVICES_INITIALIZED or not hyper_local_service:
@@ -83,20 +149,34 @@ async def generate_hyper_local_content(
         # Create request object
         request = HyperLocalContentRequest(
             topic=topic,
-            language=language,
-            grade_levels=grade_levels,
-            cultural_context=cultural_context,
-            content_type=content_type,
             subject=subject,
-            additional_requirements=additional_requirements
+            grade_levels=grade_levels,
+            language=language,
+            content_type=content_type,
+            location=location,
+            cultural_context=cultural_context,
+            include_local_examples=include_local_examples,
+            include_cultural_context=include_cultural_context,
+            include_local_dialect=include_local_dialect,
+            include_regional_references=include_regional_references,
+            include_local_currency=include_local_currency,
+            include_local_festivals=include_local_festivals,
+            include_local_traditions=include_local_traditions,
+            difficulty_level=difficulty_level,
+            content_length=content_length,
+            additional_requirements=additional_requirements,
+            include_questions=include_questions,
+            question_types=question_types,
+            generate_preview=generate_preview,
+            preview_count=preview_count
         )
             
-        logger.info(f"Received hyper-local content request for topic: {request.topic}")
+        logger.info(f"Received enhanced hyper-local content request for topic: {request.topic}")
         
         # Pass user_id for session tracking if provided
         response = hyper_local_service.generate_content(request, user_id=user_id)
         
-        logger.info(f"Hyper-local content response status: {response.status}")
+        logger.info(f"Enhanced hyper-local content response status: {response.status}")
         return response
     except HTTPException:
         raise

@@ -255,3 +255,7 @@ class MainAgentService:
                 language=request.language,
                 error_message=str(e)
             )
+
+
+# Create a singleton instance
+main_agent_service = MainAgentService()
