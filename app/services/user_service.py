@@ -9,6 +9,6 @@ def register_user(user: UserRegisterRequest):
         "full_name": user.full_name,
         "email": user.email,
         "profile_image": user.profile_image,
-        "uid": user_id,
+        "user_id": user_id,
     }
     return add_user_to_firestore(user_id, user_data)
