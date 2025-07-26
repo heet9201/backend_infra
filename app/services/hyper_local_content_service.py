@@ -1,9 +1,11 @@
 from app.models.agent_model import (
-    HyperLocalContentRequest, AgentResponse, AgentType, Language, ContentType
+    HyperLocalContentRequest, AgentResponse, AgentType, Language, ContentType, SessionInfo
 )
 from app.core.vertex_ai import generate_educational_content
 from app.utils.logger import logger
-from typing import Dict, Any
+from app.services.session_service import session_service
+from typing import Dict, Any, Optional, List
+from datetime import datetime
 
 class HyperLocalContentService:
     """Service for generating hyper-local, culturally relevant educational content"""
@@ -29,9 +31,29 @@ class HyperLocalContentService:
             ContentType.ACTIVITY: self._generate_activity_prompt
         }
     
-    def generate_content(self, request: HyperLocalContentRequest) -> AgentResponse:
+    def generate_content(self, request: HyperLocalContentRequest, user_id: Optional[str] = None) -> AgentResponse:
         """Generate hyper-local educational content based on the request"""
         try:
+            # Handle session if user_id is provided
+            if user_id:
+                # Get or create session for the user
+                user_session = session_service.get_session(user_id)
+                
+                # Update session with language preference
+                user_session.language_preference = request.language
+                
+                # Add the user request to session history
+                session_service.add_message(
+                    user_id=user_id,
+                    content=f"Generate {request.content_type} about {request.topic}",
+                    agent_type="user",
+                    metadata={
+                        "language": request.language,
+                        "topic": request.topic,
+                        "content_type": request.content_type
+                    }
+                )
+            
             # Get the appropriate prompt template
             prompt_generator = self.content_templates.get(
                 request.content_type, 
@@ -42,30 +64,83 @@ class HyperLocalContentService:
             prompt = prompt_generator(request)
             
             # Generate content using Vertex AI
-            response_text = generate_educational_content(prompt, request.language.value)
+            response_text = generate_educational_content(prompt, request.language)
             
-            return AgentResponse(
+            # Create response object
+            response = AgentResponse(
                 status="success",
                 agent_type=AgentType.HYPER_LOCAL_CONTENT,
                 response=response_text,
                 language=request.language,
                 metadata={
                     "topic": request.topic,
-                    "content_type": request.content_type.value,
+                    "content_type": request.content_type,
                     "grade_levels": request.grade_levels,
                     "cultural_context": request.cultural_context
                 }
             )
             
+            # Add agent response to session if user_id is provided
+            if user_id:
+                user_session = session_service.get_session(user_id)
+                session_service.add_message(
+                    user_id=user_id,
+                    content=response_text,
+                    agent_type=AgentType.HYPER_LOCAL_CONTENT,
+                    metadata={
+                        "language": request.language,
+                        "topic": request.topic,
+                        "content_type": request.content_type,
+                        "status": "success"
+                    }
+                )
+                
+                # Add session information to the response
+                response.session = SessionInfo(
+                    session_id=user_session.session_id,
+                    user_id=user_session.user_id,
+                    language_preference=user_session.language_preference,
+                    message_count=len(user_session.messages),
+                    context_keys=list(user_session.context.keys()) if user_session.context else [],
+                    last_active=user_session.last_active.isoformat() if isinstance(user_session.last_active, datetime) else str(user_session.last_active)
+                )
+            
+            return response
+            
         except Exception as e:
             logger.error(f"Error generating hyper-local content: {e}")
-            return AgentResponse(
+            error_response = AgentResponse(
                 status="error",
                 agent_type=AgentType.HYPER_LOCAL_CONTENT,
                 response=f"I apologize, but I couldn't generate the requested content about {request.topic}. Please try rephrasing your request.",
                 language=request.language,
                 error_message=str(e)
             )
+            
+            # Add error response to session if user_id is provided
+            if user_id:
+                user_session = session_service.get_session(user_id)
+                session_service.add_message(
+                    user_id=user_id,
+                    content=error_response.response,
+                    agent_type=AgentType.HYPER_LOCAL_CONTENT,
+                    metadata={
+                        "status": "error",
+                        "error_message": str(e)
+                    }
+                )
+                
+                # Add session information to the error response
+                error_response.session = SessionInfo(
+                    session_id=user_session.session_id,
+                    user_id=user_session.user_id,
+                    language_preference=user_session.language_preference,
+                    message_count=len(user_session.messages),
+                    context_keys=list(user_session.context.keys()) if user_session.context else [],
+                    last_active=user_session.last_active.isoformat() if isinstance(user_session.last_active, datetime) else str(user_session.last_active)
+                )
+                
+            return error_response
     
     def _generate_story_prompt(self, request: HyperLocalContentRequest) -> str:
         """Generate prompt for story creation"""

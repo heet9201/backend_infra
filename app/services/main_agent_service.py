@@ -1,12 +1,14 @@
 from app.models.agent_model import (
     MainAgentRequest, AgentResponse, AgentType, Language, 
-    HyperLocalContentRequest, ContentType
+    HyperLocalContentRequest, ContentType, SessionInfo
 )
 from app.core.vertex_ai import generate_educational_content
 from app.utils.logger import logger
 from app.utils.language_utils import LanguageDetector, detect_content_intent
-from typing import Dict, Any
+from app.services.session_service import session_service
+from typing import Dict, Any, List
 import re
+from datetime import datetime
 
 class MainAgentService:
     """Main agent that routes requests to specialized agents"""
@@ -57,18 +59,78 @@ class MainAgentService:
     def process_request(self, request: MainAgentRequest) -> AgentResponse:
         """Process the main agent request and route to appropriate specialized agent"""
         try:
+            # Ensure we have a user ID for session management
+            if not request.user_id:
+                request.user_id = "anonymous"  # Fallback for users without ID
+                logger.warning("Request without user_id, using anonymous ID")
+            
+            try:
+                # Get session for the user (this will validate the user exists)
+                user_session = session_service.get_session(request.user_id)
+            except ValueError as e:
+                # If user doesn't exist, return an error
+                logger.error(f"User validation error: {e}")
+                return AgentResponse(
+                    status="error",
+                    agent_type=AgentType.MAIN,
+                    response="User authentication failed. Please register or login again.",
+                    language=request.language,
+                    error_message=str(e)
+                )
+            
+            # Update session context with latest query
+            if request.context:
+                user_session.context.update(request.context)
+            
             # Auto-detect language if not specified or if specified as English but query contains non-English
             detected_language = self.language_detector.detect_language(request.query)
             if request.language == Language.ENGLISH and detected_language != Language.ENGLISH:
                 request.language = detected_language
                 logger.info(f"Updated language from English to detected: {detected_language.value}")
+                
+            # Update session language preference
+            user_session.language_preference = request.language.value
             
             agent_type = self.determine_agent_type(request.query)
             
+            # Create a response based on agent type
             if agent_type == AgentType.HYPER_LOCAL_CONTENT:
-                return self._handle_hyper_local_content(request)
+                response = self._handle_hyper_local_content(request)
             else:
-                return self._handle_generic_response(request)
+                response = self._handle_generic_response(request)
+            
+            # Add the interaction to the session history
+            session_service.add_message(
+                user_id=request.user_id,
+                content=request.query,
+                agent_type="user",
+                metadata={"language": request.language.value}
+            )
+            
+            # Add the agent response to the session history
+            session_service.add_message(
+                user_id=request.user_id,
+                content=response.response,
+                agent_type=response.agent_type.value,
+                metadata={
+                    "language": response.language.value,
+                    "status": response.status,
+                    **response.metadata
+                }
+            )
+            
+            # Add session information to the response
+            session = user_session
+            response.session = SessionInfo(
+                session_id=session.session_id,
+                user_id=session.user_id,
+                language_preference=session.language_preference,
+                message_count=len(session.messages),
+                context_keys=list(session.context.keys()) if session.context else [],
+                last_active=session.last_active.isoformat() if isinstance(session.last_active, datetime) else str(session.last_active)
+            )
+            
+            return response
                 
         except Exception as e:
             logger.error(f"Error processing main agent request: {e}")
@@ -102,7 +164,11 @@ class MainAgentService:
             from app.services.hyper_local_content_service import HyperLocalContentService
             hyper_local_service = HyperLocalContentService()
             
-            return hyper_local_service.generate_content(hyper_local_request)
+            # Pass user_id to generate_content for session tracking
+            return hyper_local_service.generate_content(
+                request=hyper_local_request,
+                user_id=request.user_id
+            )
             
         except Exception as e:
             logger.error(f"Error handling hyper-local content: {e}")
@@ -122,18 +188,66 @@ class MainAgentService:
             
             response_text = generate_educational_content(prompt, request.language.value)
             
-            return AgentResponse(
-                status="success",
-                agent_type=AgentType.MAIN,
-                response=response_text,
-                language=request.language,
-                metadata={
-                    "response_type": "generic_educational_assistance"
-                }
-            )
+            # Get user session for session info
+            if request.user_id:
+                user_session = session_service.get_session(request.user_id)
+                
+                response = AgentResponse(
+                    status="success",
+                    agent_type=AgentType.MAIN,
+                    response=response_text,
+                    language=request.language,
+                    metadata={
+                        "response_type": "generic_educational_assistance"
+                    },
+                    session=SessionInfo(
+                        session_id=user_session.session_id,
+                        user_id=user_session.user_id,
+                        language_preference=user_session.language_preference,
+                        message_count=len(user_session.messages),
+                        context_keys=list(user_session.context.keys()) if user_session.context else [],
+                        last_active=user_session.last_active.isoformat() if isinstance(user_session.last_active, datetime) else str(user_session.last_active)
+                    )
+                )
+            else:
+                response = AgentResponse(
+                    status="success",
+                    agent_type=AgentType.MAIN,
+                    response=response_text,
+                    language=request.language,
+                    metadata={
+                        "response_type": "generic_educational_assistance"
+                    }
+                )
+                
+            return response
             
         except Exception as e:
             logger.error(f"Error generating generic response: {e}")
+            
+            # Include session info in error response if possible
+            if request.user_id:
+                try:
+                    user_session = session_service.get_session(request.user_id)
+                    return AgentResponse(
+                        status="error",
+                        agent_type=AgentType.MAIN,
+                        response="I'm here to help you with educational content and teaching assistance. Could you please rephrase your request?",
+                        language=request.language,
+                        error_message=str(e),
+                        session=SessionInfo(
+                            session_id=user_session.session_id,
+                            user_id=user_session.user_id,
+                            language_preference=user_session.language_preference,
+                            message_count=len(user_session.messages),
+                            context_keys=list(user_session.context.keys()) if user_session.context else [],
+                            last_active=user_session.last_active.isoformat() if isinstance(user_session.last_active, datetime) else str(user_session.last_active)
+                        )
+                    )
+                except Exception as session_error:
+                    logger.error(f"Error getting session info: {session_error}")
+                    
+            # Fallback response without session info
             return AgentResponse(
                 status="error",
                 agent_type=AgentType.MAIN,

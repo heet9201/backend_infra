@@ -44,6 +44,15 @@ class HyperLocalContentRequest(BaseModel):
     subject: Optional[str] = "general"
     additional_requirements: Optional[str] = None
 
+class SessionInfo(BaseModel):
+    """Session information included in responses"""
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
+    language_preference: Optional[str] = None
+    message_count: Optional[int] = None
+    context_keys: Optional[List[str]] = None
+    last_active: Optional[str] = None  # ISO format date string
+
 class AgentResponse(BaseModel):
     status: str
     agent_type: AgentType
@@ -51,9 +60,10 @@ class AgentResponse(BaseModel):
     language: Language
     metadata: Optional[Dict[str, Any]] = {}
     error_message: Optional[str] = None
+    session: Optional[SessionInfo] = None
 
 class MainAgentRequest(BaseModel):
     query: str
     language: Optional[Language] = Language.ENGLISH
     context: Optional[Dict[str, Any]] = {}
-    teacher_id: Optional[str] = None
+    user_id: Optional[str] = None
