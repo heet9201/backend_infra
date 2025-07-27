@@ -11,3 +11,4 @@ generated_images/
 static/
 uploads/
 __pycache__/main.cpython-313.pyc
+generated_pdfs/

@@ -14,7 +14,7 @@ class ContentType(str, Enum):
 class OutputFormat(str, Enum):
     TEXT = "text"
     BULLET_POINTS = "bullet_points"
-    QA_FORMAT = "qa_format"
+    QA_FORMAT = "q&a_format"
     MIND_MAP = "mind_map"
     FLASHCARDS = "flashcards"
 

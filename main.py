@@ -7,6 +7,7 @@ from app.routes import agent
 from app.routes import session
 from app.routes import content
 from app.routes import content_analysis
+from app.routes import worksheet
 import os
 
 # Ensure all service singletons are initialized
@@ -14,6 +15,7 @@ from app.services.main_agent_service import main_agent_service
 from app.services.hyper_local_content_service import hyper_local_content_service
 from app.services.visual_aids_service import visual_aids_service
 from app.services.content_generation_service import content_generation_service
+from app.services.worksheet_generator_service import worksheet_generator_service
 from app.utils.logger import logger
 
 logger.info("All agent services initialized in main.py")
@@ -40,10 +42,12 @@ app = FastAPI(
     version="1.2.0"
 )
 
-# Create required directories for image storage
+# Create required directories for file storage
 generated_images_dir = os.path.join(os.getcwd(), "generated_images")
+generated_pdfs_dir = os.path.join(os.getcwd(), "generated_pdfs")
 uploads_dir = os.path.join(os.getcwd(), "uploads")
 os.makedirs(generated_images_dir, exist_ok=True)
+os.makedirs(generated_pdfs_dir, exist_ok=True)
 os.makedirs(uploads_dir, exist_ok=True)
 
 # Add CORS middleware to allow requests from any origin
@@ -62,9 +66,11 @@ app.include_router(session.router, prefix="/session", tags=["User Sessions"])
 app.include_router(content.router, tags=["Content Generation"])
 app.include_router(content_analysis.router, tags=["Content Analysis"])
 app.include_router(content_analysis.content_router, tags=["Simplified Content Generation"])
+app.include_router(worksheet.router, tags=["Educational Worksheets"])
 
-# Mount the generated_images and uploads directories as static file directories
+# Mount the static file directories for generated files
 app.mount("/generated_images", StaticFiles(directory="generated_images"), name="generated_images")
+app.mount("/generated_pdfs", StaticFiles(directory="generated_pdfs"), name="generated_pdfs")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Create a static directory for other static assets if it doesn't exist

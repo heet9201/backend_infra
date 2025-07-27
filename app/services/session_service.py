@@ -208,16 +208,18 @@ class SessionService:
             logger.error(f"Error updating session context for {session_id}: {e}")
             return None
             
-    def add_message(self, session_id: str, message: UserMessage) -> Optional[UserSession]:
+    def add_message(self, user_id: str, content: str, agent_type: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         Add a message to a session
         
         Args:
-            session_id: The ID of the session
-            message: The message to add
+            user_id: The ID of the user
+            content: The message content
+            agent_type: The type of agent sending the message
+            metadata: Optional metadata for the message
             
         Returns:
-            Optional[UserSession]: The updated session, or None if the session doesn't exist
+            str: The session ID if successful, empty string otherwise
         """
         if not user_id:
             logger.error("Cannot add message: User ID is required")

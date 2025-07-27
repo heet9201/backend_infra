@@ -31,7 +31,7 @@ async def generate_content(
     
     - **file**: The image or PDF file to process
     - **content_type**: Type of content to generate (detailed_content, summary, key_points, etc.)
-    - **output_format**: Format of the output content (text, bullet_points, qa_format, etc.)
+    - **output_format**: Format of the output content (text, bullet_points, q&a_format, etc.)
     - **research_depth**: Depth of research to perform (surface, basic, moderate, etc.)
     - **content_length**: Length of content to generate (concise, brief, moderate, etc.)
     - **local_language**: Language for the generated content (default: English)

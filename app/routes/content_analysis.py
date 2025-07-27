@@ -91,7 +91,7 @@ async def analyze_content(
     
     - **file**: The image or PDF file to process
     - **content_type**: Type of content to generate (detailed_content, summary, key_points, etc.)
-    - **output_format**: Format of the output content (text, bullet_points, qa_format, etc.)
+    - **output_format**: Format of the output content (text, bullet_points, q&a_format, etc.)
     - **research_depth**: Depth of research to perform (surface, basic, moderate, etc.)
     - **content_length**: Length of content to generate (concise, brief, moderate, etc.)
     - **local_language**: Language for the generated content (default: English)
@@ -361,7 +361,7 @@ async def generate_content(
     Request body should include:
     - **file_data**: Base64-encoded file data (required)
     - **file_type**: "image" or "pdf" (required)
-    - **output_format**: "qa_format" (Q&A format) or "bullet_points" (default: "qa_format")
+    - **output_format**: "q&a_format" (Q&A format) or "bullet_points" (default: "q&a_format")
     - **language**: Language for the generated content (default: "English")
     - **user_id**: Optional user ID for session tracking
     """
@@ -376,7 +376,7 @@ async def generate_content(
         # Extract parameters from request
         file_data = request.get("file_data")
         file_type = request.get("file_type")
-        output_format = request.get("output_format", "qa_format")
+        output_format = request.get("output_format", "q&a_format")
         language = request.get("language", "English")
         user_id = request.get("user_id")
         session_id = None
@@ -451,12 +451,12 @@ async def generate_content(
             source_type = "pdf"
         
         # Validate output format
-        if output_format not in ["qa_format", "bullet_points"]:
-            logger.warning(f"Invalid output_format: {output_format}. Using default: qa_format")
-            output_format = "qa_format"
+        if output_format not in ["q&a_format", "bullet_points"]:
+            logger.warning(f"Invalid output_format: {output_format}. Using default: q&a_format")
+            output_format = "q&a_format"
         
         # Generate content based on the requested output format
-        if output_format == "qa_format":
+        if output_format == "q&a_format":
             # Generate Q&A content
             prompt = f"""
 You are an educational content expert. Create a set of questions and answers based on the following text.
