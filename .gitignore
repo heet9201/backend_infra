@@ -9,3 +9,5 @@ postman_collection.json
 postman_collection_old.json
 generated_images/
 static/
+uploads/
+__pycache__/main.cpython-313.pyc

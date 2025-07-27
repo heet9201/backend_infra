@@ -384,7 +384,8 @@ async def test_agent():
 @router.post("/visual-aids-direct", response_model=VisualAidResponse)
 async def generate_visual_aid_direct(
     description: str = Body(..., embed=True),
-    text: Optional[str] = Body(None, embed=True)
+    text: Optional[str] = Body(None, embed=True),
+    user_id: Optional[str] = Body(None, embed=True, description="User ID for session tracking")
 ):
     """
     Direct endpoint for generating educational visual aids using Imagen 4
@@ -401,6 +402,19 @@ async def generate_visual_aid_direct(
     
     try:
         logger.info(f"Direct visual aid generation request: {description[:50]}...")
+        
+        # Check session if user_id is provided
+        if user_id:
+            try:
+                # Validate user session
+                session = session_service.get_session(user_id)
+                logger.info(f"Using session for user: {user_id} in visual aids direct")
+            except Exception as session_error:
+                logger.warning(f"Invalid user_id for session: {session_error}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid user_id: {user_id}"
+                )
         
         # Prepare the prompt based on input
         prompt = description

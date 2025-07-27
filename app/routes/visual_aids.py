@@ -4,12 +4,14 @@ from app.utils.logger import logger
 from typing import Optional
 from pydantic import BaseModel
 import os
+from app.services.session_service import session_service
 
 router = APIRouter()
 
 class VisualAidRequest(BaseModel):
     description: str
     text: Optional[str] = None
+    user_id: Optional[str] = None
 
 class VisualAidResponse(BaseModel):
     image_path: str
@@ -28,6 +30,19 @@ async def create_visual_aid(request: VisualAidRequest = Body(...)):
     """
     try:
         logger.info(f"Visual aid generation request received for: {request.description[:50]}...")
+        
+        # Check session if user_id is provided
+        if request.user_id:
+            try:
+                # Validate user session
+                session = session_service.get_session(request.user_id)
+                logger.info(f"Using session for user: {request.user_id}")
+            except Exception as session_error:
+                logger.warning(f"Invalid user_id for session: {session_error}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid user_id: {request.user_id}"
+                )
         
         # Prepare the prompt based on input
         prompt = request.description

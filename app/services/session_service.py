@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from app.models.session_model import UserSession, UserMessage, SessionResponse, SessionHistoryResponse, SessionDetailsResponse
 from app.core.firestore import db
 from app.utils.logger import logger
@@ -154,18 +154,70 @@ class SessionService:
             self.active_sessions[session_id] = session
             return session
     
-    def add_message(self, user_id: str, content: str, agent_type: str, metadata: Optional[Dict] = None) -> str:
+    def update_session_context(self, session_id: str, context_update: Dict[str, Any]) -> Optional[UserSession]:
         """
-        Add a message to the user's session
+        Update the context data of a session
         
         Args:
-            user_id: The ID of the user
-            content: The message content
-            agent_type: The type of agent that generated the response
-            metadata: Additional metadata for the message
+            session_id: The ID of the session
+            context_update: Dictionary with context data to update
             
         Returns:
-            str: The session ID
+            Optional[UserSession]: The updated session, or None if the session doesn't exist
+        """
+        try:
+            # Get the session
+            if session_id not in self.active_sessions:
+                # Try to get from Firestore
+                session_doc = self.sessions_collection.document(session_id).get()
+                if not session_doc.exists:
+                    logger.warning(f"Session {session_id} not found for context update")
+                    return None
+                
+                # Session exists in Firestore but not in memory, need to load it first
+                self.get_session(session_doc.to_dict().get("user_id"))
+                
+            # Get the session from memory
+            session = self.active_sessions.get(session_id)
+            if not session:
+                logger.warning(f"Session {session_id} not found in memory for context update")
+                return None
+            
+            # Update the context
+            if not session.context:
+                session.context = {}
+                
+            # Merge the update into the existing context
+            session.context.update(context_update)
+            
+            # Update last_active
+            session.last_active = datetime.now()
+            
+            # Update in Firestore
+            updates = {
+                "context": session.context,
+                "last_active": session.last_active.isoformat()
+            }
+            
+            self.sessions_collection.document(session_id).update(updates)
+            
+            logger.info(f"Updated context for session {session_id}")
+            return session
+            
+        except Exception as e:
+            logger.error(f"Error updating session context for {session_id}: {e}")
+            return None
+            
+    def add_message(self, session_id: str, message: UserMessage) -> Optional[UserSession]:
+        """
+        Add a message to a session
+        
+        Args:
+            session_id: The ID of the session
+            message: The message to add
+            
+        Returns:
+            Optional[UserSession]: The updated session, or None if the session doesn't exist
         """
         if not user_id:
             logger.error("Cannot add message: User ID is required")

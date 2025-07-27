@@ -506,3 +506,83 @@ def extract_specific_keywords_from_prompt(prompt: str) -> str:
     
     # Fallback - just use the first few words
     return " ".join(words[:3])
+
+
+def extract_text_from_image_with_vertex(image_data: bytes) -> str:
+    """Extract text from an image using Vertex AI's multimodal capabilities"""
+    try:
+        if not VERTEX_AI_AVAILABLE or not VERTEX_AI_INITIALIZED:
+            logger.warning("Vertex AI not available for image text extraction")
+            return "Vertex AI is not properly configured for image text extraction."
+            
+        # Use Gemini for image understanding
+        model = get_gemini_model()
+        
+        # Create a Part from the image data
+        image_part = Part.from_data(image_data, mime_type="image/jpeg")
+        
+        # Prompt for text extraction
+        prompt = """
+        Extract all text visible in this image.
+        Format your response as plain text only.
+        If there are any diagrams, charts, or visual elements, describe them briefly.
+        If no text is visible, respond with "No text detected in image."
+        """
+        
+        # Generate content from the image
+        response = model.generate_content([prompt, image_part])
+        
+        if not response or not hasattr(response, 'text'):
+            return "Unable to extract text from image."
+            
+        return response.text
+        
+    except Exception as e:
+        logger.error(f"Error extracting text from image with Vertex AI: {e}")
+        return f"Error extracting text from image: {str(e)}"
+
+
+def extract_text_from_pdf_with_vertex(pdf_data: bytes) -> str:
+    """Extract text from a PDF using Vertex AI's multimodal capabilities"""
+    try:
+        if not VERTEX_AI_AVAILABLE or not VERTEX_AI_INITIALIZED:
+            logger.warning("Vertex AI not available for PDF text extraction")
+            return "Vertex AI is not properly configured for PDF text extraction."
+        
+        # Save PDF to a temporary file
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
+            temp_file.write(pdf_data)
+            temp_path = temp_file.name
+            
+        try:
+            # Use Gemini for PDF understanding - this would ideally use Document AI,
+            # but we're using Gemini multimodal as a simpler solution
+            model = get_gemini_model()
+            
+            # For PDFs, we'll use a workaround with specific prompting
+            # This could be enhanced with proper Document AI integration
+            prompt = """
+            Extract and summarize the key textual content from this PDF.
+            Include all important information, formatted as plain text.
+            If the PDF contains multiple pages, try to extract content from at least the first few pages.
+            """
+            
+            # Read the PDF as Parts
+            pdf_part = Part.from_uri(temp_path, mime_type="application/pdf")
+            
+            # Generate content from the PDF
+            response = model.generate_content([prompt, pdf_part])
+            
+            if not response or not hasattr(response, 'text'):
+                return "Unable to extract text from PDF."
+                
+            return response.text
+            
+        finally:
+            # Clean up the temporary file
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+        
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF with Vertex AI: {e}")
+        return f"Error extracting text from PDF: {str(e)}"
